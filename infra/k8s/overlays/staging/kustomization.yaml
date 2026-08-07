@@ -1,0 +1,25 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: stockflow-staging
+namePrefix: staging-
+
+resources:
+  - ../../base
+  - secrets.yaml
+
+images:
+  - name: ghcr.io/OWNER/stockflow-backend
+    newTag: staging
+  - name: ghcr.io/OWNER/stockflow-frontend
+    newTag: staging
+
+patches:
+  - path: ingress-host.yaml
+  - path: replicas.yaml
+
+configMapGenerator:
+  - name: stockflow-config
+    behavior: merge
+    literals:
+      - CORS_ORIGIN=https://staging.stockflow.example.com

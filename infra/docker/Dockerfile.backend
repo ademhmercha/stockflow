@@ -1,0 +1,33 @@
+# --- Étape de build ---
+FROM node:20-alpine AS build
+WORKDIR /app
+
+COPY apps/backend/package*.json ./
+RUN npm ci
+
+COPY apps/backend/ ./
+RUN npm run build
+
+# --- Étape de production ---
+FROM node:20-slim AS production
+WORKDIR /app
+ENV NODE_ENV=production
+
+# Puppeteer a besoin de Chromium et de ses dépendances système pour générer les PDF.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    chromium \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+
+COPY apps/backend/package*.json ./
+RUN npm ci --omit=dev
+
+COPY --from=build /app/dist ./dist
+
+EXPOSE 4000
+USER node
+
+CMD ["node", "dist/server.js"]

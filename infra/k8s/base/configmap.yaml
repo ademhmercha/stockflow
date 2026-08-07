@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: stockflow-config
+data:
+  NODE_ENV: "production"
+  PORT: "4000"
+  CORS_ORIGIN: "http://stockflow.local"
+  # Le timbre fiscal tunisien change au gré des lois de finances : il reste
+  # piloté via cette variable plutôt que codé en dur dans l'application.
+  TIMBRE_FISCAL_MONTANT: "1"
+  JWT_ACCESS_EXPIRES_IN: "15m"
+  JWT_REFRESH_EXPIRES_IN: "7d"

@@ -1,0 +1,40 @@
+# Dépendances
+node_modules/
+
+# Builds
+dist/
+build/
+apps/frontend/dist/
+apps/backend/dist/
+
+# Environnement
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Secrets Kubernetes réels (garder uniquement les *.example.yaml)
+infra/k8s/overlays/**/secrets.yaml
+
+# n8n (données locales, pas le dossier de workflows versionnés)
+.n8n/
+
+# Logs
+*.log
+npm-debug.log*
+
+# Éditeurs / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# État local des outils (Claude Code, etc.)
+.claude/
+
+# Tests / couverture
+coverage/
+
+# Cache de build TypeScript / ESLint
+*.tsbuildinfo
+.eslintcache

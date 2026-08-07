@@ -1,0 +1,81 @@
+name: stockflow
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.backend
+      target: build
+    command: sh -c "npm run dev"
+    working_dir: /app
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: development
+      PORT: 4000
+      MONGO_URI: mongodb://mongo:27017/stockflow
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret-change-me}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-jwt-refresh-secret-change-me}
+      TIMBRE_FISCAL_MONTANT: ${TIMBRE_FISCAL_MONTANT:-1}
+      CORS_ORIGIN: http://localhost:5173
+    volumes:
+      - ../apps/backend/src:/app/src
+      - ../apps/backend/package.json:/app/package.json
+      - ../apps/backend/tsconfig.json:/app/tsconfig.json
+      - backend-node-modules:/app/node_modules
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ..
+      dockerfile: infra/docker/Dockerfile.frontend
+      target: dev
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:4000/api
+    volumes:
+      - ../apps/frontend/src:/app/src
+      - ../apps/frontend/index.html:/app/index.html
+      - ../apps/frontend/package.json:/app/package.json
+      - frontend-node-modules:/app/node_modules
+    depends_on:
+      - backend
+
+  n8n:
+    image: n8nio/n8n:latest
+    restart: unless-stopped
+    ports:
+      - "5678:5678"
+    environment:
+      N8N_HOST: localhost
+      N8N_PORT: 5678
+      N8N_PROTOCOL: http
+      WEBHOOK_URL: http://localhost:5678/
+      GENERIC_TIMEZONE: Africa/Tunis
+    volumes:
+      - n8n-data:/home/node/.n8n
+      - ../n8n/workflows:/home/node/workflows
+
+volumes:
+  mongo-data:
+  n8n-data:
+  backend-node-modules:
+  frontend-node-modules:

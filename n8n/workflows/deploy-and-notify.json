@@ -1,0 +1,133 @@
+{
+  "name": "StockFlow - Deploy and Notify",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deploy-and-notify",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "1a1f1e10-0000-4000-8000-000000000001",
+      "name": "Webhook GitHub Actions",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [-120, 0],
+      "webhookId": "deploy-and-notify"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "repo", "name": "repo", "type": "string", "value": "={{ $json.body.repo }}" },
+            { "id": "commit", "name": "commit", "type": "string", "value": "={{ $json.body.commit }}" },
+            { "id": "author", "name": "author", "type": "string", "value": "={{ $json.body.author }}" },
+            {
+              "id": "backendImage",
+              "name": "backendImage",
+              "type": "string",
+              "value": "={{ $json.body.backendImage }}"
+            },
+            {
+              "id": "frontendImage",
+              "name": "frontendImage",
+              "type": "string",
+              "value": "={{ $json.body.frontendImage }}"
+            },
+            {
+              "id": "environment",
+              "name": "environment",
+              "type": "string",
+              "value": "={{ $json.body.environment }}"
+            },
+            {
+              "id": "namespace",
+              "name": "namespace",
+              "type": "string",
+              "value": "=stockflow-{{ $json.body.environment }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1a1f1e10-0000-4000-8000-000000000002",
+      "name": "Préparer les variables",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [100, 0]
+    },
+    {
+      "parameters": {
+        "command": "=kubectl set image deployment/backend backend={{ $json.backendImage }} -n {{ $json.namespace }} && kubectl set image deployment/frontend frontend={{ $json.frontendImage }} -n {{ $json.namespace }}"
+      },
+      "id": "1a1f1e10-0000-4000-8000-000000000003",
+      "name": "Déployer sur Kubernetes",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [320, 0]
+    },
+    {
+      "parameters": {
+        "command": "=kubectl rollout status deployment/backend -n {{ $json.namespace }} --timeout=120s && kubectl rollout status deployment/frontend -n {{ $json.namespace }} --timeout=120s"
+      },
+      "id": "1a1f1e10-0000-4000-8000-000000000004",
+      "name": "Attendre le rollout",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [540, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{ $env.NOTIFICATION_WEBHOOK_URL }}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ text: `✅ StockFlow déployé sur ${$('Préparer les variables').item.json.environment} — commit ${$('Préparer les variables').item.json.commit} par ${$('Préparer les variables').item.json.author}` }) }}",
+        "options": {}
+      },
+      "id": "1a1f1e10-0000-4000-8000-000000000005",
+      "name": "Notifier (Slack/Webhook)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [760, -80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: \"deployed\", environment: $('Préparer les variables').item.json.environment, commit: $('Préparer les variables').item.json.commit }) }}",
+        "options": {}
+      },
+      "id": "1a1f1e10-0000-4000-8000-000000000006",
+      "name": "Répondre à GitHub Actions",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [760, 80]
+    }
+  ],
+  "connections": {
+    "Webhook GitHub Actions": {
+      "main": [[{ "node": "Préparer les variables", "type": "main", "index": 0 }]]
+    },
+    "Préparer les variables": {
+      "main": [[{ "node": "Déployer sur Kubernetes", "type": "main", "index": 0 }]]
+    },
+    "Déployer sur Kubernetes": {
+      "main": [[{ "node": "Attendre le rollout", "type": "main", "index": 0 }]]
+    },
+    "Attendre le rollout": {
+      "main": [
+        [
+          { "node": "Notifier (Slack/Webhook)", "type": "main", "index": 0 },
+          { "node": "Répondre à GitHub Actions", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Reçoit le webhook de déploiement envoyé par GitHub Actions (deploy.yml), met à jour les images sur le cluster Kubernetes ciblé, attend la fin du rollout puis notifie et répond à l'appelant."
+  }
+}
