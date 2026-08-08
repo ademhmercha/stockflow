@@ -70,7 +70,15 @@ jobs:
     steps:
       - name: Appeler le webhook n8n
         run: |
+          # --retry : le webhook pointe vers un tunnel ngrok exposant une
+          # instance n8n locale (voir infra/k8s/README-k8s.md) — un simple
+          # blip réseau côté machine hôte suffit à faire échouer un appel
+          # unique (503 "tunnel offline" pendant une reconnexion, vécu en
+          # conditions réelles). On retente plutôt que d'échouer tout le job.
           curl --fail --silent --show-error -X POST "${{ secrets.N8N_WEBHOOK_URL }}" \
+            --retry 5 \
+            --retry-delay 15 \
+            --retry-all-errors \
             -H "Content-Type: application/json" \
             -d '{
               "repo": "${{ github.repository }}",
