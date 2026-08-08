@@ -6,6 +6,11 @@ metadata:
     app: backend
 spec:
   replicas: 2
+  # Défaut Kubernetes (600s) trop court : l'image backend embarque Chromium
+  # pour Puppeteer (~930 Mo) et un premier pull depuis un registre distant a
+  # dépassé 10 minutes en conditions réelles, faisant échouer le rollout à
+  # tort alors que le déploiement finissait par réussir juste après.
+  progressDeadlineSeconds: 1200
   selector:
     matchLabels:
       app: backend

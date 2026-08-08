@@ -9,15 +9,20 @@ resources:
   - secrets.yaml
 
 images:
-  # TEMPORAIRE pour test local Minikube (voir infra/k8s/README-k8s.md §3) :
-  # pointe vers les images buildées dans le daemon Docker de Minikube plutôt
-  # que vers GHCR. À revenir à "ghcr.io/OWNER/..." avant un vrai déploiement staging.
+  # Pointe vers les vraies images GHCR poussées par deploy.yml. Le pipeline
+  # n8n déploie ensuite une image précise (tag = SHA du commit) via
+  # `kubectl set image`, indépendamment de ce que dit ce fichier — ce n'est
+  # que la référence de départ pour un premier `kubectl apply -k` à froid.
+  # (Historique : ceci pointait temporairement vers des tags :local pour des
+  # tests Minikube sans registre ; réapplique ce fichier avec prudence tant
+  # qu'un vrai déploiement piloté par n8n est en cours, sous peine de
+  # l'écraser silencieusement — vécu en conditions réelles le 08/08/2026.)
   - name: ghcr.io/OWNER/stockflow-backend
-    newName: stockflow-backend
-    newTag: local
+    newName: ghcr.io/ademhmercha/stockflow-backend
+    newTag: latest
   - name: ghcr.io/OWNER/stockflow-frontend
-    newName: stockflow-frontend
-    newTag: local
+    newName: ghcr.io/ademhmercha/stockflow-frontend
+    newTag: latest
 
 patches:
   - path: ingress-host.yaml

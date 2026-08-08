@@ -67,7 +67,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const { execSync } = require('child_process');\nconst data = $input.first().json;\n\nconst out1 = execSync(`kubectl set image deployment/staging-backend backend=${data.backendImage} -n stockflow-staging`, { encoding: 'utf8' });\nconst out2 = execSync(`kubectl set image deployment/staging-frontend frontend=${data.frontendImage} -n stockflow-staging`, { encoding: 'utf8' });\n\nreturn [{ json: { ...data, applyOutput: (out1 + out2).trim() } }];"
+        "jsCode": "const { exec } = require('child_process');\nconst data = $input.first().json;\n\n// execSync bloque tout le event loop n8n pendant la durée de la commande, ce\n// qui empêche le Task Runner d'envoyer ses heartbeats et fait tuer la tâche\n// comme \"unresponsive\" au-delà d'~30s (vécu en conditions réelles). exec async\n// + Promise laisse le event loop respirer pendant que kubectl tourne.\nfunction run(cmd) {\n  return new Promise((resolve, reject) => {\n    exec(cmd, { encoding: 'utf8' }, (error, stdout) => {\n      if (error) return reject(error);\n      resolve(stdout);\n    });\n  });\n}\n\nconst out1 = await run(`kubectl set image deployment/staging-backend backend=${data.backendImage} -n stockflow-staging`);\nconst out2 = await run(`kubectl set image deployment/staging-frontend frontend=${data.frontendImage} -n stockflow-staging`);\n\nreturn [{ json: { ...data, applyOutput: (out1 + out2).trim() } }];"
       }
     },
     {
@@ -80,7 +80,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const { execSync } = require('child_process');\nconst data = $input.first().json;\n\n// 300s (pas 90s) : un vrai pull depuis GHCR sur internet prend nettement plus\n// longtemps qu'une image déjà en cache local dans le daemon Docker de Minikube.\n// Un timeout trop court ici déclenche un faux rollback alors que le déploiement\n// aurait fini par réussir tout seul (vécu en conditions réelles le 08/08/2026).\nconst out1 = execSync('kubectl rollout status deployment/staging-backend -n stockflow-staging --timeout=300s', { encoding: 'utf8' });\nconst out2 = execSync('kubectl rollout status deployment/staging-frontend -n stockflow-staging --timeout=300s', { encoding: 'utf8' });\n\nreturn [{ json: { ...data, rolloutOutput: (out1 + out2).trim() } }];"
+        "jsCode": "const { exec } = require('child_process');\nconst data = $input.first().json;\n\n// exec async (pas execSync) : un pull GHCR réel prend facilement 1-5 minutes,\n// et execSync bloquant tout ce temps fait tuer la tâche par le Task Runner\n// n8n (heartbeat manqué) bien avant que --timeout=300s ait pu s'exprimer.\nfunction run(cmd) {\n  return new Promise((resolve, reject) => {\n    exec(cmd, { encoding: 'utf8' }, (error, stdout) => {\n      if (error) return reject(error);\n      resolve(stdout);\n    });\n  });\n}\n\nconst out1 = await run('kubectl rollout status deployment/staging-backend -n stockflow-staging --timeout=300s');\nconst out2 = await run('kubectl rollout status deployment/staging-frontend -n stockflow-staging --timeout=300s');\n\nreturn [{ json: { ...data, rolloutOutput: (out1 + out2).trim() } }];"
       }
     },
     {

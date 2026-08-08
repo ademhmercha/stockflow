@@ -6,6 +6,11 @@ metadata:
     app: frontend
 spec:
   replicas: 2
+  # Cf. backend-deployment.yaml : marge alignée pour que les deux rollouts
+  # d'un même déploiement (déclenchés ensemble par le pipeline) partagent la
+  # même tolérance, même si l'image frontend (Nginx + build statique) est
+  # nettement plus légère et pull en pratique bien plus vite.
+  progressDeadlineSeconds: 1200
   selector:
     matchLabels:
       app: frontend
