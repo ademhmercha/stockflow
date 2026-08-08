@@ -5,7 +5,7 @@ import { Facture } from "../models/Facture";
 import { Client } from "../models/Client";
 import { Entreprise } from "../models/Entreprise";
 import { Produit } from "../models/Produit";
-import { CreateFactureInput } from "../validators/facture.validator";
+import { CreateFactureInput, UpdateStatutFactureInput } from "../validators/facture.validator";
 import { calculerTotauxFacture, genererNumeroFacture, LigneCalculable } from "../services/tva.service";
 import { genererFacturePdf } from "../services/pdf.service";
 
@@ -72,6 +72,19 @@ export const createFacture = asyncHandler(async (req: Request, res: Response) =>
   });
 
   res.status(201).json(facture);
+});
+
+export const updateStatutFacture = asyncHandler(async (req: Request, res: Response) => {
+  const { statut } = req.body as UpdateStatutFactureInput;
+
+  const facture = await Facture.findOneAndUpdate(
+    { _id: req.params.id, entrepriseId: req.user!.entrepriseId },
+    { $set: { statut } },
+    { new: true }
+  );
+  if (!facture) throw ApiError.notFound("Facture introuvable");
+
+  res.json(facture);
 });
 
 export const genererPdfFacture = asyncHandler(async (req: Request, res: Response) => {

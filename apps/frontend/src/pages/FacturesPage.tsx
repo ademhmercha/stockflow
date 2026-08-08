@@ -109,6 +109,11 @@ export function FacturesPage() {
     window.open(url, "_blank");
   }
 
+  async function changerStatut(factureId: string, statut: StatutFacture) {
+    setFactures((prev) => prev.map((f) => (f._id === factureId ? { ...f, statut } : f)));
+    await api.put(`/factures/${factureId}/statut`, { statut }).catch(() => chargerDonnees());
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -143,7 +148,18 @@ export function FacturesPage() {
                 <TableCell>{formatDate(f.dateEmission)}</TableCell>
                 <TableCell>{formatMontant(f.montantTTC)}</TableCell>
                 <TableCell>
-                  <Badge variant={STATUT_VARIANT[f.statut]}>{f.statut}</Badge>
+                  <Select value={f.statut} onValueChange={(v) => changerStatut(f._id, v as StatutFacture)}>
+                    <SelectTrigger className="h-8 w-36 border-none bg-transparent p-0 shadow-none focus:ring-0">
+                      <Badge variant={STATUT_VARIANT[f.statut]} className="cursor-pointer">
+                        {f.statut}
+                      </Badge>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="brouillon">brouillon</SelectItem>
+                      <SelectItem value="envoyee">envoyée</SelectItem>
+                      <SelectItem value="payee">payée</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <Button variant="ghost" size="icon" onClick={() => telechargerPdf(f)}>

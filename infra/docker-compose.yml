@@ -63,12 +63,14 @@ services:
     image: n8nio/n8n:latest
     restart: unless-stopped
     ports:
-      - "5678:5678"
+      # 5678 est mappé sur 5679 côté hôte : évite un conflit si une instance
+      # n8n tourne déjà nativement sur la machine (ex: install globale npm).
+      - "5679:5678"
     environment:
       N8N_HOST: localhost
       N8N_PORT: 5678
       N8N_PROTOCOL: http
-      WEBHOOK_URL: http://localhost:5678/
+      WEBHOOK_URL: http://localhost:5679/
       GENERIC_TIMEZONE: Africa/Tunis
     volumes:
       - n8n-data:/home/node/.n8n

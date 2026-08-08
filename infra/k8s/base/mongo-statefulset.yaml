@@ -47,11 +47,19 @@ spec:
               command: ["mongosh", "--eval", "db.adminCommand('ping')"]
             initialDelaySeconds: 5
             periodSeconds: 10
+            # mongosh démarre un runtime JS complet avant de ping-er : le
+            # défaut Kubernetes (timeoutSeconds: 1) est trop court et
+            # provoque des faux échecs de probe sous charge, entraînant des
+            # redémarrages en boucle du pod alors que Mongo tourne normalement.
+            timeoutSeconds: 5
+            failureThreshold: 5
           livenessProbe:
             exec:
               command: ["mongosh", "--eval", "db.adminCommand('ping')"]
             initialDelaySeconds: 15
             periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 5
   volumeClaimTemplates:
     - metadata:
         name: mongo-data

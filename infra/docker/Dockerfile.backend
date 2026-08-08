@@ -2,6 +2,16 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
+# Chromium pour Puppeteer (génération PDF des factures) : nécessaire ici car
+# docker-compose utilise cette étape "build" comme conteneur de dev (target:
+# build) avec hot-reload — pas seulement comme étape intermédiaire vers la
+# production. Le téléchargement automatique du Chromium intégré à Puppeteer
+# ne fonctionne pas de façon fiable sur Alpine (musl vs glibc), d'où l'usage
+# du paquet système via apk, comme pour l'étape production (apt).
+RUN apk add --no-cache chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+
 COPY apps/backend/package*.json ./
 RUN npm ci
 

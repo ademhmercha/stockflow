@@ -1,0 +1,203 @@
+{
+  "name": "StockFlow - Déploiement (squelette)",
+  "nodes": [
+    {
+      "id": "node-webhook-0001",
+      "name": "Webhook - Déploiement",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "deploy-stockflow",
+        "responseMode": "lastNode",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-set-0002",
+      "name": "Extraire données build",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [500, 300],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a1",
+              "name": "backendImage",
+              "type": "string",
+              "value": "={{ $json.body.backendImage || 'non-defini' }}"
+            },
+            {
+              "id": "a2",
+              "name": "frontendImage",
+              "type": "string",
+              "value": "={{ $json.body.frontendImage || 'non-defini' }}"
+            },
+            {
+              "id": "a3",
+              "name": "commit",
+              "type": "string",
+              "value": "={{ $json.body.commit || 'non-defini' }}"
+            },
+            {
+              "id": "a4",
+              "name": "author",
+              "type": "string",
+              "value": "={{ $json.body.author || 'non-defini' }}"
+            },
+            {
+              "id": "a5",
+              "name": "environment",
+              "type": "string",
+              "value": "={{ $json.body.environment || 'staging' }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "node-code-0003",
+      "name": "kubectl apply (déploiement K8s)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 300],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const { execSync } = require('child_process');\nconst data = $input.first().json;\n\nconst out1 = execSync(`kubectl set image deployment/staging-backend backend=${data.backendImage} -n stockflow-staging`, { encoding: 'utf8' });\nconst out2 = execSync(`kubectl set image deployment/staging-frontend frontend=${data.frontendImage} -n stockflow-staging`, { encoding: 'utf8' });\n\nreturn [{ json: { ...data, applyOutput: (out1 + out2).trim() } }];"
+      }
+    },
+    {
+      "id": "node-code-0004",
+      "name": "kubectl rollout status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1000, 300],
+      "onError": "continueErrorOutput",
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const { execSync } = require('child_process');\nconst data = $input.first().json;\n\nconst out1 = execSync('kubectl rollout status deployment/staging-backend -n stockflow-staging --timeout=90s', { encoding: 'utf8' });\nconst out2 = execSync('kubectl rollout status deployment/staging-frontend -n stockflow-staging --timeout=90s', { encoding: 'utf8' });\n\nreturn [{ json: { ...data, rolloutOutput: (out1 + out2).trim() } }];"
+      }
+    },
+    {
+      "id": "node-http-0006",
+      "name": "Notifier succès (Slack)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 180],
+      "parameters": {
+        "url": "https://webhook.site/COLLE-TON-ID-ICI",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'success', ...$json }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "node-http-0007",
+      "name": "Rollback + alerte échec",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1250, 420],
+      "parameters": {
+        "url": "https://webhook.site/COLLE-TON-ID-ICI",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ status: 'failed', ...$json }) }}",
+        "options": {}
+      }
+    },
+    {
+      "id": "sticky-0008",
+      "name": "Note - Comment tester ce workflow",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [230, 480],
+      "parameters": {
+        "content": "## Tester le webhook (PowerShell, instance native sur 5678)\n\nUne fois \"Execute workflow\" cliqué dans l'éditeur, lance immédiatement :\n\n```powershell\n$body = @{\n    backendImage  = \"stockflow-backend:local\"\n    frontendImage = \"stockflow-frontend:local\"\n    commit        = \"abc123\"\n    author        = \"toi\"\n    environment   = \"staging\"\n} | ConvertTo-Json\n\nInvoke-RestMethod -Uri \"http://localhost:5678/webhook-test/deploy-stockflow\" -Method Post -ContentType \"application/json\" -Body $body\n```\n\nPour tester la branche échec, remplace backendImage par \"stockflow-backend:doesnotexist\".\n\nRegarde l'onglet Executions pour voir les données passer.",
+        "height": 320,
+        "width": 460,
+        "color": 4
+      }
+    },
+    {
+      "id": "sticky-0009",
+      "name": "Note - Avant de Publish",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [750, 560],
+      "parameters": {
+        "content": "## Il reste une seule chose à faire\n\nRemplace \"https://webhook.site/COLLE-TON-ID-ICI\" dans les deux nodes HTTP Request par :\n\n1. Ton URL unique générée sur https://webhook.site (test rapide, sans compte), OU\n2. Une vraie URL de webhook entrant Slack/Discord quand tu es prêt\n\nLes commandes kubectl (apply + rollout status) ciblent déjà le vrai namespace \"stockflow-staging\" et les déploiements \"staging-backend\"/\"staging-frontend\" de ton cluster Minikube — rien à changer de ce côté.\n\nUne fois testé en mode \"Execute workflow\", bascule sur \"Publish\" pour que l'URL production (`/webhook/deploy-stockflow`) écoute en permanence.",
+        "height": 260,
+        "width": 620,
+        "color": 5
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Déploiement": {
+      "main": [
+        [
+          {
+            "node": "Extraire données build",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extraire données build": {
+      "main": [
+        [
+          {
+            "node": "kubectl apply (déploiement K8s)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "kubectl apply (déploiement K8s)": {
+      "main": [
+        [
+          {
+            "node": "kubectl rollout status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "kubectl rollout status": {
+      "main": [
+        [
+          {
+            "node": "Notifier succès (Slack)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Rollback + alerte échec",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Pipeline de déploiement StockFlow, complété : webhook + extraction de données + kubectl set image + kubectl rollout status (avec branche succès/erreur native) + notifications. Cible le namespace stockflow-staging sur le cluster Minikube local. Remplacer les URLs webhook.site par de vraies URLs Slack/Discord avant usage réel."
+  }
+}

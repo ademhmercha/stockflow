@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { STATUTS_FACTURE } from "../models/Facture";
 
 const tauxTVA = z.union([z.literal(19), z.literal(13), z.literal(7), z.literal(0)]);
 
@@ -20,4 +21,9 @@ export const factureIdParamSchema = z.object({
   id: z.string().min(1),
 });
 
+export const updateStatutFactureSchema = z.object({
+  statut: z.enum(STATUTS_FACTURE),
+});
+
 export type CreateFactureInput = z.infer<typeof createFactureSchema>;
+export type UpdateStatutFactureInput = z.infer<typeof updateStatutFactureSchema>;

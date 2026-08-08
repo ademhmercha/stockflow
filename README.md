@@ -59,7 +59,7 @@ Services démarrés :
 | Frontend (Vite, hot-reload) | http://localhost:5173 |
 | Backend (API, hot-reload) | http://localhost:4000/api |
 | MongoDB | localhost:27017 |
-| n8n | http://localhost:5678 |
+| n8n | http://localhost:5679 |
 
 Vérifier que tout fonctionne :
 
