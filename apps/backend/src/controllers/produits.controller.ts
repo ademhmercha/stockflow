@@ -3,12 +3,18 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import { Produit } from "../models/Produit";
 import { CreateProduitInput, UpdateProduitInput } from "../validators/produit.validator";
+import { PaginationQuery } from "../validators/pagination.validator";
+import { paginateFind } from "../utils/paginate";
 
 export const listProduits = asyncHandler(async (req: Request, res: Response) => {
-  const produits = await Produit.find({ entrepriseId: req.user!.entrepriseId, actif: true }).sort({
-    nom: 1,
-  });
-  res.json(produits);
+  const pagination = req.query as unknown as PaginationQuery;
+  const result = await paginateFind(
+    Produit,
+    { entrepriseId: req.user!.entrepriseId, actif: true },
+    pagination,
+    (query) => query.sort({ nom: 1 })
+  );
+  res.json(result);
 });
 
 export const getProduit = asyncHandler(async (req: Request, res: Response) => {

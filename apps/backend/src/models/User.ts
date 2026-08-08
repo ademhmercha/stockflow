@@ -23,6 +23,11 @@ const userSchema = new Schema(
     refreshTokenHash: { type: String, select: false, default: null },
     nom: { type: String, trim: true },
     actif: { type: Boolean, default: true },
+    // Distinct des rôles applicatifs (admin/vendeur/comptable), qui sont tous
+    // scopés à UNE entreprise. Un platform owner opère au-dessus de toutes les
+    // entreprises (support, modération) — ce n'est jamais accordé via l'API
+    // publique, uniquement via le script de bootstrap (voir scripts/).
+    isPlatformOwner: { type: Boolean, default: false },
   },
   { timestamps: true }
 );

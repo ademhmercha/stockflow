@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, Package, ArrowLeftRight, Users, FileText, LogOut } from "lucide-react";
+import { LayoutDashboard, Package, ArrowLeftRight, Users, FileText, ShieldCheck, LogOut } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore, hasRole } from "@/stores/auth.store";
 import { Role } from "@/types";
@@ -19,6 +19,12 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/factures", label: "Factures", icon: FileText },
 ];
 
+const navLinkClass = ({ isActive }: { isActive: boolean }) =>
+  cn(
+    "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
+    isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
+  );
+
 export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const clearSession = useAuthStore((s) => s.clearSession);
@@ -31,20 +37,23 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 p-3">
         {NAV_ITEMS.filter((item) => !item.roles || hasRole(user?.role, ...item.roles)).map((item) => (
-          <NavLink
-            key={item.to}
-            to={item.to}
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
-                isActive && "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground"
-              )
-            }
-          >
+          <NavLink key={item.to} to={item.to} className={navLinkClass}>
             <item.icon className="h-4 w-4" />
             {item.label}
           </NavLink>
         ))}
+
+        {user?.isPlatformOwner && (
+          <>
+            <div className="my-2 border-t border-border pt-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground/70">
+              Plateforme
+            </div>
+            <NavLink to="/admin" className={navLinkClass}>
+              <ShieldCheck className="h-4 w-4" />
+              Administration
+            </NavLink>
+          </>
+        )}
       </nav>
 
       <div className="border-t border-border p-3">

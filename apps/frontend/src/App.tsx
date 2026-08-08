@@ -7,6 +7,7 @@ import { ProduitsPage } from "@/pages/ProduitsPage";
 import { MouvementsPage } from "@/pages/MouvementsPage";
 import { ClientsPage } from "@/pages/ClientsPage";
 import { FacturesPage } from "@/pages/FacturesPage";
+import { AdminPage } from "@/pages/AdminPage";
 
 export default function App() {
   return (
@@ -39,6 +40,14 @@ export default function App() {
         />
         <Route path="/clients" element={<ClientsPage />} />
         <Route path="/factures" element={<FacturesPage />} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedRoute requirePlatformOwner>
+              <AdminPage />
+            </ProtectedRoute>
+          }
+        />
       </Route>
 
       <Route path="/" element={<Navigate to="/dashboard" replace />} />

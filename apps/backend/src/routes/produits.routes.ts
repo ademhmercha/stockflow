@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth";
 import { requireRole } from "../middlewares/role";
+import { checkEntrepriseActive } from "../middlewares/platform";
 import { validate } from "../middlewares/validate";
 import {
   createProduitSchema,
   produitIdParamSchema,
   updateProduitSchema,
 } from "../validators/produit.validator";
+import { paginationQuerySchema } from "../validators/pagination.validator";
 import {
   createProduit,
   deleteProduit,
@@ -17,9 +19,9 @@ import {
 
 const router = Router();
 
-router.use(requireAuth);
+router.use(requireAuth, checkEntrepriseActive);
 
-router.get("/", listProduits);
+router.get("/", validate({ query: paginationQuerySchema }), listProduits);
 router.get("/:id", validate({ params: produitIdParamSchema }), getProduit);
 
 // La gestion du catalogue (création/édition/suppression) est réservée à

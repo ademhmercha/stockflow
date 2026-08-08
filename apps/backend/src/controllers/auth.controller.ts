@@ -52,7 +52,13 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
   res.status(201).json({
     accessToken,
     refreshToken,
-    user: { id: user._id, email: user.email, role: user.role, entrepriseId: entreprise._id },
+    user: {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      entrepriseId: entreprise._id,
+      isPlatformOwner: user.isPlatformOwner,
+    },
   });
 });
 
@@ -83,7 +89,13 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
   res.json({
     accessToken,
     refreshToken,
-    user: { id: user._id, email: user.email, role: user.role, entrepriseId: user.entrepriseId },
+    user: {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+      entrepriseId: user.entrepriseId,
+      isPlatformOwner: user.isPlatformOwner,
+    },
   });
 });
 

@@ -1,5 +1,5 @@
 import { ChangeEvent, FormEvent, useEffect, useRef, useState } from "react";
-import { Plus, Upload, Pencil } from "lucide-react";
+import { Plus, Upload, Pencil, Package } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +13,14 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { api } from "@/lib/api-client";
-import { Produit } from "@/types";
+import { PaginatedResponse, Pagination, Produit } from "@/types";
 import { formatMontant } from "@/lib/utils";
+
+const PAGE_SIZE = 20;
 
 type ProduitFormState = {
   nom: string;
@@ -41,21 +46,28 @@ const FORM_VIDE: ProduitFormState = {
 
 export function ProduitsPage() {
   const [produits, setProduits] = useState<Produit[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Produit | null>(null);
   const [form, setForm] = useState<ProduitFormState>(FORM_VIDE);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  async function chargerProduits() {
+  async function chargerProduits(pageCible = page) {
     setLoading(true);
-    const data = await api.get<Produit[]>("/produits");
-    setProduits(data);
+    const result = await api.get<PaginatedResponse<Produit>>(
+      `/produits?page=${pageCible}&limit=${PAGE_SIZE}`
+    );
+    setProduits(result.data);
+    setPagination(result.pagination);
+    setPage(pageCible);
     setLoading(false);
   }
 
   useEffect(() => {
-    chargerProduits();
+    chargerProduits(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function ouvrirCreation() {
@@ -169,8 +181,22 @@ export function ProduitsPage() {
         </TableHeader>
         <TableBody>
           {loading ? (
+            <TableSkeleton rows={6} columns={7} />
+          ) : produits.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={7}>Chargement...</TableCell>
+              <TableCell colSpan={7}>
+                <EmptyState
+                  icon={Package}
+                  title="Aucun produit"
+                  description="Ajoute ton premier produit ou importe un catalogue via un fichier CSV."
+                  action={
+                    <Button size="sm" onClick={ouvrirCreation}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Nouveau produit
+                    </Button>
+                  }
+                />
+              </TableCell>
             </TableRow>
           ) : (
             produits.map((p) => (
@@ -195,6 +221,8 @@ export function ProduitsPage() {
           )}
         </TableBody>
       </Table>
+
+      {pagination && <PaginationControls pagination={pagination} onPageChange={chargerProduits} />}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

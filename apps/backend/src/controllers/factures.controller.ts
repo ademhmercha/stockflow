@@ -6,14 +6,20 @@ import { Client } from "../models/Client";
 import { Entreprise } from "../models/Entreprise";
 import { Produit } from "../models/Produit";
 import { CreateFactureInput, UpdateStatutFactureInput } from "../validators/facture.validator";
+import { PaginationQuery } from "../validators/pagination.validator";
 import { calculerTotauxFacture, genererNumeroFacture, LigneCalculable } from "../services/tva.service";
 import { genererFacturePdf } from "../services/pdf.service";
+import { paginateFind } from "../utils/paginate";
 
 export const listFactures = asyncHandler(async (req: Request, res: Response) => {
-  const factures = await Facture.find({ entrepriseId: req.user!.entrepriseId })
-    .populate("clientId", "nom")
-    .sort({ dateEmission: -1 });
-  res.json(factures);
+  const pagination = req.query as unknown as PaginationQuery;
+  const result = await paginateFind(
+    Facture,
+    { entrepriseId: req.user!.entrepriseId },
+    pagination,
+    (query) => query.populate("clientId", "nom").sort({ dateEmission: -1 })
+  );
+  res.json(result);
 });
 
 export const getFacture = asyncHandler(async (req: Request, res: Response) => {

@@ -3,7 +3,12 @@ import { useAuthStore } from "@/stores/auth.store";
 const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000/api";
 
 class ApiClientError extends Error {
-  constructor(public status: number, message: string, public details?: unknown) {
+  constructor(
+    public status: number,
+    message: string,
+    public details?: unknown,
+    public code?: string
+  ) {
     super(message);
   }
 }
@@ -67,7 +72,10 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new ApiClientError(res.status, body.error ?? res.statusText, body.details);
+    if (body.code === "ENTREPRISE_SUSPENDUE") {
+      useAuthStore.getState().setSuspended(body.error);
+    }
+    throw new ApiClientError(res.status, body.error ?? res.statusText, body.details, body.code);
   }
 
   if (res.status === 204) return undefined as T;

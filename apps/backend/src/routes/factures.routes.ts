@@ -1,12 +1,14 @@
 import { Router } from "express";
 import { requireAuth } from "../middlewares/auth";
 import { requireRole } from "../middlewares/role";
+import { checkEntrepriseActive } from "../middlewares/platform";
 import { validate } from "../middlewares/validate";
 import {
   createFactureSchema,
   factureIdParamSchema,
   updateStatutFactureSchema,
 } from "../validators/facture.validator";
+import { paginationQuerySchema } from "../validators/pagination.validator";
 import {
   createFacture,
   genererPdfFacture,
@@ -17,9 +19,9 @@ import {
 
 const router = Router();
 
-router.use(requireAuth);
+router.use(requireAuth, checkEntrepriseActive);
 
-router.get("/", listFactures);
+router.get("/", validate({ query: paginationQuerySchema }), listFactures);
 router.get("/:id", validate({ params: factureIdParamSchema }), getFacture);
 router.get("/:id/pdf", validate({ params: factureIdParamSchema }), genererPdfFacture);
 router.post(

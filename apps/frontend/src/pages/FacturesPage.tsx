@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Plus, Trash2, FileDown } from "lucide-react";
+import { Plus, Trash2, FileDown, Receipt } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,9 +13,18 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { api } from "@/lib/api-client";
-import { Client, Facture, Produit, StatutFacture } from "@/types";
+import { Client, Facture, PaginatedResponse, Pagination, Produit, StatutFacture } from "@/types";
 import { formatDate, formatMontant } from "@/lib/utils";
+
+const PAGE_SIZE = 20;
+// Limite haute utilisée pour peupler les listes déroulantes (client/produit) du
+// formulaire de création : au-delà, il faudrait un select avec recherche
+// côté serveur plutôt que de tout charger d'un coup.
+const DROPDOWN_LIMIT = 100;
 
 interface LigneBrouillon {
   produitId: string;
@@ -34,6 +43,8 @@ const TIMBRE_FISCAL_INDICATIF = 1;
 
 export function FacturesPage() {
   const [factures, setFactures] = useState<Facture[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [page, setPage] = useState(1);
   const [clients, setClients] = useState<Client[]>([]);
   const [produits, setProduits] = useState<Produit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,21 +53,30 @@ export function FacturesPage() {
   const [clientId, setClientId] = useState("");
   const [lignes, setLignes] = useState<LigneBrouillon[]>([]);
 
-  async function chargerDonnees() {
+  async function chargerFactures(pageCible = page) {
     setLoading(true);
-    const [f, c, p] = await Promise.all([
-      api.get<Facture[]>("/factures"),
-      api.get<Client[]>("/clients"),
-      api.get<Produit[]>("/produits"),
-    ]);
-    setFactures(f);
-    setClients(c);
-    setProduits(p);
+    const result = await api.get<PaginatedResponse<Facture>>(
+      `/factures?page=${pageCible}&limit=${PAGE_SIZE}`
+    );
+    setFactures(result.data);
+    setPagination(result.pagination);
+    setPage(pageCible);
     setLoading(false);
   }
 
+  async function chargerListesDeroulantes() {
+    const [c, p] = await Promise.all([
+      api.get<PaginatedResponse<Client>>(`/clients?page=1&limit=${DROPDOWN_LIMIT}`),
+      api.get<PaginatedResponse<Produit>>(`/produits?page=1&limit=${DROPDOWN_LIMIT}`),
+    ]);
+    setClients(c.data);
+    setProduits(p.data);
+  }
+
   useEffect(() => {
-    chargerDonnees();
+    chargerFactures(1);
+    chargerListesDeroulantes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function ouvrirCreation() {
@@ -100,7 +120,7 @@ export function FacturesPage() {
 
     await api.post("/factures", { clientId, lignes: lignesValides });
     setDialogOpen(false);
-    await chargerDonnees();
+    await chargerFactures(1); // les nouvelles factures apparaissent en premier (tri par date desc)
   }
 
   async function telechargerPdf(facture: Facture) {
@@ -111,7 +131,7 @@ export function FacturesPage() {
 
   async function changerStatut(factureId: string, statut: StatutFacture) {
     setFactures((prev) => prev.map((f) => (f._id === factureId ? { ...f, statut } : f)));
-    await api.put(`/factures/${factureId}/statut`, { statut }).catch(() => chargerDonnees());
+    await api.put(`/factures/${factureId}/statut`, { statut }).catch(() => chargerFactures());
   }
 
   return (
@@ -137,8 +157,22 @@ export function FacturesPage() {
         </TableHeader>
         <TableBody>
           {loading ? (
+            <TableSkeleton rows={6} columns={6} />
+          ) : factures.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={6}>Chargement...</TableCell>
+              <TableCell colSpan={6}>
+                <EmptyState
+                  icon={Receipt}
+                  title="Aucune facture"
+                  description="Crée ta première facture à partir d'un client et de produits existants."
+                  action={
+                    <Button size="sm" onClick={ouvrirCreation}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Nouvelle facture
+                    </Button>
+                  }
+                />
+              </TableCell>
             </TableRow>
           ) : (
             factures.map((f) => (
@@ -171,6 +205,8 @@ export function FacturesPage() {
           )}
         </TableBody>
       </Table>
+
+      {pagination && <PaginationControls pagination={pagination} onPageChange={chargerFactures} />}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent className="max-w-2xl">

@@ -1,10 +1,23 @@
 export type Role = "admin" | "vendeur" | "comptable";
 
+export interface Pagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: Pagination;
+}
+
 export interface User {
   id: string;
   email: string;
   role: Role;
   entrepriseId: string;
+  isPlatformOwner?: boolean;
 }
 
 export interface Produit {
@@ -66,4 +79,28 @@ export interface DashboardStats {
   nombreFacturesMois: number;
   topProduits: { _id: string; nom: string; quantiteVendue: number }[];
   stockCritique: Pick<Produit, "_id" | "nom" | "sku" | "stockActuel" | "seuilAlerte">[];
+}
+
+export type StatutEntreprise = "actif" | "essai" | "suspendu";
+export type PlanEntreprise = "gratuit" | "basique" | "pro";
+
+export interface EntrepriseAdmin {
+  _id: string;
+  nom: string;
+  matriculeFiscal: string;
+  statut: StatutEntreprise;
+  plan: PlanEntreprise;
+  createdAt: string;
+  nombreUtilisateurs: number;
+  nombreProduits: number;
+  nombreFactures: number;
+  chiffreAffaires: number;
+}
+
+export interface PlatformStats {
+  totalEntreprises: number;
+  entreprisesParStatut: Record<StatutEntreprise, number>;
+  totalUtilisateurs: number;
+  chiffreAffairesPlateforme: number;
+  nombreFacturesPlateforme: number;
 }

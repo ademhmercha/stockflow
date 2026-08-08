@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowLeftRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,9 +7,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { api } from "@/lib/api-client";
-import { MouvementStock, Produit } from "@/types";
+import { MouvementStock, PaginatedResponse, Produit } from "@/types";
 import { formatDate } from "@/lib/utils";
+
+// Cf. FacturesPage : limite haute pour peupler le select produit d'un coup.
+const DROPDOWN_LIMIT = 100;
 
 export function MouvementsPage() {
   const [mouvements, setMouvements] = useState<MouvementStock[]>([]);
@@ -26,10 +31,10 @@ export function MouvementsPage() {
     setLoading(true);
     const [m, p] = await Promise.all([
       api.get<MouvementStock[]>("/stock/mouvements"),
-      api.get<Produit[]>("/produits"),
+      api.get<PaginatedResponse<Produit>>(`/produits?page=1&limit=${DROPDOWN_LIMIT}`),
     ]);
     setMouvements(m);
-    setProduits(p);
+    setProduits(p.data);
     setLoading(false);
   }
 
@@ -128,8 +133,16 @@ export function MouvementsPage() {
         </TableHeader>
         <TableBody>
           {loading ? (
+            <TableSkeleton rows={6} columns={5} />
+          ) : mouvements.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5}>Chargement...</TableCell>
+              <TableCell colSpan={5}>
+                <EmptyState
+                  icon={ArrowLeftRight}
+                  title="Aucun mouvement de stock"
+                  description="Les entrées et sorties enregistrées ci-dessus apparaîtront dans cet historique."
+                />
+              </TableCell>
             </TableRow>
           ) : (
             mouvements.map((m) => (

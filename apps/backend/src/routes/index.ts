@@ -6,6 +6,7 @@ import clientsRoutes from "./clients.routes";
 import facturesRoutes from "./factures.routes";
 import dashboardRoutes from "./dashboard.routes";
 import healthRoutes from "./health.routes";
+import adminRoutes from "./admin.routes";
 
 const router = Router();
 
@@ -16,5 +17,6 @@ router.use("/clients", clientsRoutes);
 router.use("/factures", facturesRoutes);
 router.use("/dashboard", dashboardRoutes);
 router.use("/health", healthRoutes);
+router.use("/admin", adminRoutes);
 
 export default router;

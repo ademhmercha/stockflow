@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useState } from "react";
-import { Plus, Pencil } from "lucide-react";
+import { Plus, Pencil, Users } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,27 +11,38 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { PaginationControls } from "@/components/ui/pagination";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { EmptyState } from "@/components/ui/empty-state";
 import { api } from "@/lib/api-client";
-import { Client } from "@/types";
+import { Client, PaginatedResponse, Pagination } from "@/types";
 
 const FORM_VIDE = { nom: "", matriculeFiscal: "", email: "", telephone: "", adresse: "" };
+const PAGE_SIZE = 20;
 
 export function ClientsPage() {
   const [clients, setClients] = useState<Client[]>([]);
+  const [pagination, setPagination] = useState<Pagination | null>(null);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
   const [form, setForm] = useState(FORM_VIDE);
 
-  async function chargerClients() {
+  async function chargerClients(pageCible = page) {
     setLoading(true);
-    const data = await api.get<Client[]>("/clients");
-    setClients(data);
+    const result = await api.get<PaginatedResponse<Client>>(
+      `/clients?page=${pageCible}&limit=${PAGE_SIZE}`
+    );
+    setClients(result.data);
+    setPagination(result.pagination);
+    setPage(pageCible);
     setLoading(false);
   }
 
   useEffect(() => {
-    chargerClients();
+    chargerClients(1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   function ouvrirCreation() {
@@ -85,8 +96,22 @@ export function ClientsPage() {
         </TableHeader>
         <TableBody>
           {loading ? (
+            <TableSkeleton rows={6} columns={5} />
+          ) : clients.length === 0 ? (
             <TableRow>
-              <TableCell colSpan={5}>Chargement...</TableCell>
+              <TableCell colSpan={5}>
+                <EmptyState
+                  icon={Users}
+                  title="Aucun client"
+                  description="Ajoute ton premier client pour pouvoir lui établir des factures."
+                  action={
+                    <Button size="sm" onClick={ouvrirCreation}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Nouveau client
+                    </Button>
+                  }
+                />
+              </TableCell>
             </TableRow>
           ) : (
             clients.map((c) => (
@@ -105,6 +130,8 @@ export function ClientsPage() {
           )}
         </TableBody>
       </Table>
+
+      {pagination && <PaginationControls pagination={pagination} onPageChange={chargerClients} />}
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>

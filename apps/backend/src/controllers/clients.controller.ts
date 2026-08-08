@@ -3,10 +3,18 @@ import { asyncHandler } from "../utils/asyncHandler";
 import { ApiError } from "../utils/ApiError";
 import { Client } from "../models/Client";
 import { CreateClientInput, UpdateClientInput } from "../validators/client.validator";
+import { PaginationQuery } from "../validators/pagination.validator";
+import { paginateFind } from "../utils/paginate";
 
 export const listClients = asyncHandler(async (req: Request, res: Response) => {
-  const clients = await Client.find({ entrepriseId: req.user!.entrepriseId }).sort({ nom: 1 });
-  res.json(clients);
+  const pagination = req.query as unknown as PaginationQuery;
+  const result = await paginateFind(
+    Client,
+    { entrepriseId: req.user!.entrepriseId },
+    pagination,
+    (query) => query.sort({ nom: 1 })
+  );
+  res.json(result);
 });
 
 export const getClient = asyncHandler(async (req: Request, res: Response) => {
