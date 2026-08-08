@@ -80,7 +80,7 @@
       "parameters": {
         "mode": "runOnceForAllItems",
         "language": "javaScript",
-        "jsCode": "const { execSync } = require('child_process');\nconst data = $input.first().json;\n\nconst out1 = execSync('kubectl rollout status deployment/staging-backend -n stockflow-staging --timeout=90s', { encoding: 'utf8' });\nconst out2 = execSync('kubectl rollout status deployment/staging-frontend -n stockflow-staging --timeout=90s', { encoding: 'utf8' });\n\nreturn [{ json: { ...data, rolloutOutput: (out1 + out2).trim() } }];"
+        "jsCode": "const { execSync } = require('child_process');\nconst data = $input.first().json;\n\n// 300s (pas 90s) : un vrai pull depuis GHCR sur internet prend nettement plus\n// longtemps qu'une image déjà en cache local dans le daemon Docker de Minikube.\n// Un timeout trop court ici déclenche un faux rollback alors que le déploiement\n// aurait fini par réussir tout seul (vécu en conditions réelles le 08/08/2026).\nconst out1 = execSync('kubectl rollout status deployment/staging-backend -n stockflow-staging --timeout=300s', { encoding: 'utf8' });\nconst out2 = execSync('kubectl rollout status deployment/staging-frontend -n stockflow-staging --timeout=300s', { encoding: 'utf8' });\n\nreturn [{ json: { ...data, rolloutOutput: (out1 + out2).trim() } }];"
       }
     },
     {
