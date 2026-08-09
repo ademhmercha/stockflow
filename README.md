@@ -38,27 +38,7 @@ Au-dessus des tenants, une couche **propriétaire de plateforme** (`isPlatformOw
 
 Un `git push` sur `main` déclenche un pipeline complet, entièrement automatisé, du build jusqu'au déploiement sur un cluster Kubernetes réel — sans intervention manuelle après le push.
 
-```mermaid
-flowchart LR
-    Dev(("👤 git push<br/>main")) --> GHA["GitHub Actions"]
-
-    GHA --> Build["Build & push<br/>images Docker"]
-    Build --> GHCR[("GHCR<br/>ghcr.io/…/stockflow-*")]
-    Build --> Hook["POST webhook<br/>(retry ×5)"]
-
-    Hook -. tunnel public .-> Ngrok["ngrok"]
-    Ngrok --> N8N["n8n<br/>(local)"]
-
-    N8N --> Apply["kubectl set image"]
-    Apply --> Rollout["kubectl rollout<br/>status"]
-    Rollout -->|succès| NotifyOk["Notification succès"]
-    Rollout -->|échec| Rollback["Rollback + alerte"]
-
-    GHCR -. pull image .-> K8s[("Cluster K8s<br/>Minikube / staging")]
-    Apply -.-> K8s
-    K8s --> Pods["Pods backend/frontend<br/>(2 replicas, health checks)"]
-    Pods --> Mongo[("MongoDB<br/>StatefulSet")]
-```
+![Architecture DevOps — pipeline CI/CD StockFlow](docs/architecture-devops.png)
 
 ### Détail des étapes
 
