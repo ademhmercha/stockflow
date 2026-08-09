@@ -54,6 +54,9 @@ Un `git push` sur `main` déclenche un pipeline complet, entièrement automatis�
    - branche **succès** ou **rollback/alerte** selon le résultat, nativement (pas de node IF manuel)
 5. **Kubernetes** (Minikube en local, ou tout cluster cloud en changeant juste l'overlay) : 2 replicas par service, sondes de santé sur `/api/health`, `progressDeadlineSeconds` calibré pour tolérer un premier pull d'image (~1 Go avec Chromium/Puppeteer).
 
+![Exécution réelle du pipeline n8n](docs/n8n-execution-reussie.png)
+*Exécution réelle du pipeline (environnement staging, succès en 4m 39s) — branchement natif succès/échec, sans node IF manuel.*
+
 ### Conteneurisation & orchestration
 
 ```
