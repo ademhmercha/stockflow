@@ -1,185 +1,124 @@
 # StockFlow
 
-**StockFlow** est une application SaaS de gestion de stock et de facturation
-destinée aux PME/TPE tunisiennes (commerce, distribution, petite industrie —
-5 à 20 employés), pensée pour remplacer Excel par un outil simple.
+**StockFlow** est une application SaaS de gestion de stock et de facturation pour les PME/TPE tunisiennes (commerce, distribution, petite industrie), pensée pour remplacer Excel. Elle gère nativement la TVA tunisienne multi-taux (19/13/7%) et le timbre fiscal (montant configurable, car fixé chaque année par la loi de finances).
 
-Elle gère nativement les spécificités fiscales tunisiennes :
+---
 
-- **TVA multi-taux** : 19% (taux normal), 13% et 7% (taux réduits), configurable par produit
-- **Timbre fiscal** : taxe forfaitaire par facture, montant piloté via la variable
-  d'environnement `TIMBRE_FISCAL_MONTANT` (car ce montant change au gré des lois de finances)
+## Partie 1 — Développement de l'application
 
-## Stack technique
+### Stack
 
 | Domaine | Technologies |
 |---|---|
-| Frontend | React 18, Vite, TailwindCSS, shadcn/ui, React Router, Zustand |
+| Frontend | React 18, Vite, TailwindCSS, shadcn/ui, Zustand |
 | Backend | Node.js, Express, TypeScript, Mongoose |
 | Base de données | MongoDB |
-| Auth | JWT (access + refresh token), rôles `admin` / `vendeur` / `comptable` |
-| PDF | Puppeteer (génération des factures) |
-| Conteneurisation | Docker, docker-compose |
-| Orchestration | Kubernetes (Kustomize, base + overlays staging/production) |
-| CI/CD | GitHub Actions → GHCR → webhook n8n |
-| Tests | Vitest (frontend), Jest + Supertest (backend) |
+| Auth | JWT (access + refresh), rôles `admin` / `vendeur` / `comptable` |
+| PDF | Puppeteer (factures) |
+| Tests | Jest + Supertest (52 tests backend), Vitest (frontend) |
 
-## Structure du repo
+### Modèle multi-tenant
+
+Chaque entreprise inscrite est isolée : toute requête backend filtre systématiquement par `entrepriseId`, garanti par une suite de tests dédiée (`tenant-isolation.test.ts`) — une entreprise ne peut jamais lire, modifier ni même détecter l'existence des données d'une autre.
+
+Au-dessus des tenants, une couche **propriétaire de plateforme** (`isPlatformOwner`, jamais accordable via l'API publique) permet de lister toutes les entreprises, voir des statistiques globales, et suspendre/réactiver un compte — avec blocage immédiat de l'accès API en cas de suspension.
+
+### Fonctionnalités clés
+
+- Produits (TVA par produit, alertes de stock), mouvements de stock (entrée/sortie atomiques)
+- Clients, factures (calcul HT/TVA/TTC ligne par ligne, timbre fiscal, cycle de vie brouillon → envoyée → payée)
+- Dashboard (CA du mois, top produits, alertes stock)
+- Pagination sur toutes les listes, rate limiting sur l'authentification (10 tentatives/15 min)
+
+---
+
+## Partie 2 — DevOps : architecture et pipeline
+
+### Vue d'ensemble
+
+Un `git push` sur `main` déclenche un pipeline complet, entièrement automatisé, du build jusqu'au déploiement sur un cluster Kubernetes réel — sans intervention manuelle après le push.
+
+```mermaid
+flowchart LR
+    Dev(("👤 git push<br/>main")) --> GHA["GitHub Actions"]
+
+    GHA --> Build["Build & push<br/>images Docker"]
+    Build --> GHCR[("GHCR<br/>ghcr.io/…/stockflow-*")]
+    Build --> Hook["POST webhook<br/>(retry ×5)"]
+
+    Hook -. tunnel public .-> Ngrok["ngrok"]
+    Ngrok --> N8N["n8n<br/>(local)"]
+
+    N8N --> Apply["kubectl set image"]
+    Apply --> Rollout["kubectl rollout<br/>status"]
+    Rollout -->|succès| NotifyOk["Notification succès"]
+    Rollout -->|échec| Rollback["Rollback + alerte"]
+
+    GHCR -. pull image .-> K8s[("Cluster K8s<br/>Minikube / staging")]
+    Apply -.-> K8s
+    K8s --> Pods["Pods backend/frontend<br/>(2 replicas, health checks)"]
+    Pods --> Mongo[("MongoDB<br/>StatefulSet")]
+```
+
+### Détail des étapes
+
+1. **`ci.yml`** — sur chaque Pull Request : lint + tests backend/frontend, bloque le merge si échec.
+2. **`deploy.yml`** — sur push vers `main` :
+   - build les images `backend`/`frontend` (multi-stage Docker, tag = SHA du commit + `latest`)
+   - push vers **GHCR** (GitHub Container Registry)
+   - appelle un **webhook n8n** avec le nom des images buildées (`curl --retry 5`, tolère les coupures réseau côté tunnel)
+3. **ngrok** expose l'instance **n8n locale** (`localhost:5678`) à une URL publique — c'est le seul pont entre le cloud GitHub et l'environnement de déploiement local.
+4. **n8n** (`n8n/workflows/deploy-stockflow-squelette.json`) reçoit le webhook et exécute :
+   - `kubectl set image` sur les déploiements `backend`/`frontend`
+   - `kubectl rollout status` (timeout 300s, en `exec` asynchrone pour ne jamais bloquer le runner n8n)
+   - branche **succès** ou **rollback/alerte** selon le résultat, nativement (pas de node IF manuel)
+5. **Kubernetes** (Minikube en local, ou tout cluster cloud en changeant juste l'overlay) : 2 replicas par service, sondes de santé sur `/api/health`, `progressDeadlineSeconds` calibré pour tolérer un premier pull d'image (~1 Go avec Chromium/Puppeteer).
+
+### Conteneurisation & orchestration
 
 ```
-stockflow/
-├── apps/
-│   ├── frontend/          # React app (Vite)
-│   └── backend/           # API Express/TypeScript
-├── infra/
-│   ├── docker/             # Dockerfiles + config Nginx
-│   ├── docker-compose.yml  # Environnement de dev local
-│   └── k8s/                # Manifests Kubernetes (base + overlays)
-├── .github/workflows/      # CI (tests) + CD (build/push/notify n8n)
-├── n8n/workflows/           # Workflow n8n exporté (déploiement + notification)
-└── .env.example
+infra/
+├── docker/                 # Dockerfiles multi-stage (dev + production)
+├── docker-compose.yml       # Environnement de dev local (mongo, backend, frontend, n8n)
+└── k8s/
+    ├── base/                # Manifests communs (Deployments, Services, Ingress...)
+    └── overlays/
+        ├── staging/         # Kustomize : namespace, replicas, image tags
+        └── production/
 ```
 
-## 1. Lancer le projet en local (Docker Compose)
+`docker compose up --build` (depuis `infra/`) lance tout l'environnement de dev avec hot-reload. Voir [infra/k8s/README-k8s.md](infra/k8s/README-k8s.md) pour le déploiement Kubernetes détaillé (Minikube local → cluster cloud).
 
-Prérequis : Docker Desktop.
+### Limite connue, assumée
+
+n8n tourne en local et est exposé via un tunnel ngrok gratuit — pratique pour développer/démontrer le pipeline sans louer de serveur, mais l'URL est éphémère et la machine doit rester allumée. Pour une vraie prod, n8n serait hébergé sur un serveur dédié (ou n8n Cloud) avec une URL fixe.
+
+---
+
+## Démarrage rapide
 
 ```bash
 cp .env.example infra/.env
-# éditer infra/.env si besoin (secrets JWT, etc.)
-
-cd infra
-docker compose up --build
+cd infra && docker compose up --build
 ```
-
-Services démarrés :
 
 | Service | URL |
 |---|---|
-| Frontend (Vite, hot-reload) | http://localhost:5173 |
-| Backend (API, hot-reload) | http://localhost:4000/api |
-| MongoDB | localhost:27017 |
+| Frontend | http://localhost:5173 |
+| Backend | http://localhost:4000/api |
 | n8n | http://localhost:5679 |
 
-Vérifier que tout fonctionne :
-
 ```bash
-curl http://localhost:4000/api/health
-# -> {"status":"ok","db":"connected","uptime":...}
-```
-
-Puis ouvrez http://localhost:5173, créez un compte via `/api/auth/register`
-(ou ajoutez un formulaire d'inscription — pour l'instant, testez via l'API :
-voir la section "Commandes de vérification" ci-dessous) et connectez-vous.
-
-## 2. Lancer sans Docker (dev natif)
-
-```bash
-# Backend
-cd apps/backend
-cp .env.example .env
-npm install
-npm run dev        # http://localhost:4000
-
-# Frontend (autre terminal)
-cd apps/frontend
-cp .env.example .env
-npm install
-npm run dev         # http://localhost:5173
-```
-
-Une instance MongoDB locale (ou `docker run -p 27017:27017 mongo:7`) est requise.
-
-## 3. Déploiement Kubernetes
-
-Voir [infra/k8s/README-k8s.md](infra/k8s/README-k8s.md) pour la marche à suivre
-détaillée (cluster Minikube local puis cluster cloud), résumé :
-
-```bash
-minikube start -p stockflow --driver=docker
-kubectl apply -k infra/k8s/overlays/staging
-```
-
-## 4. Flux CI/CD → n8n → Kubernetes
-
-```
- Développeur                GitHub Actions                 n8n                  Kubernetes
- ───────────                ──────────────                 ───                  ──────────
-
-  git push main
-       │
-       ▼
-  ┌─────────────┐    PR    ┌──────────────────┐
-  │   git push  │─────────▶│   ci.yml          │
-  └─────────────┘          │  lint + tests     │
-                            │  bloque le merge  │
-                            │  si échec         │
-                            └──────────────────┘
-
-  merge sur main
-       │
-       ▼
-                            ┌──────────────────────────┐
-                            │   deploy.yml              │
-                            │  1. build images Docker   │
-                            │     (backend + frontend)  │
-                            │  2. push vers GHCR         │
-                            │     (tag = SHA du commit)  │
-                            │  3. POST webhook n8n       │
-                            └──────────────┬────────────┘
-                                           │ payload JSON
-                                           │ {repo, commit, author,
-                                           │  backendImage, frontendImage,
-                                           │  environment}
-                                           ▼
-                            ┌──────────────────────────────┐
-                            │  n8n : deploy-and-notify.json  │
-                            │  1. reçoit le webhook           │
-                            │  2. kubectl set image (backend, │
-                            │     frontend) sur le namespace  │
-                            │     ciblé                       │
-                            │  3. attend le rollout            │
-                            │  4. notifie (Slack/Webhook)      │
-                            │  5. répond à GitHub Actions      │
-                            └───────────────┬──────────────────┘
-                                            │
-                                            ▼
-                            ┌──────────────────────────┐
-                            │  Cluster Kubernetes         │
-                            │  (staging ou production)    │
-                            │  → nouvelles images en ligne │
-                            └──────────────────────────┘
-```
-
-## Commandes de vérification
-
-```bash
-# Santé de l'API
-curl http://localhost:4000/api/health
-
-# Créer un compte (crée aussi l'entreprise)
-curl -X POST http://localhost:4000/api/auth/login -H "Content-Type: application/json" -d '{}' # 400 attendu (validation zod)
-
-curl -X POST http://localhost:4000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "admin@mapme.tn",
-    "password": "motdepasse123",
-    "role": "admin",
-    "entreprise": { "nom": "Ma PME", "matriculeFiscal": "1234567A" }
-  }'
-
-# Tests backend
-cd apps/backend && npm test
-
-# Tests frontend
-cd apps/frontend && npm test
+curl http://localhost:4000/api/health   # {"status":"ok","db":"connected"}
+cd apps/backend && npm test              # 52 tests
+cd apps/frontend && npm test             # tests frontend
 ```
 
 ## Rôles utilisateurs
 
 | Rôle | Accès |
 |---|---|
-| `admin` | Accès complet |
+| `admin` | Accès complet à son entreprise |
 | `vendeur` | Produits, stock, clients, factures |
-| `comptable` | Clients, factures, tableau de bord (lecture seule sur les produits) |
+| `comptable` | Clients, factures, dashboard (lecture seule sur les produits) |
+| Propriétaire de plateforme | Panneau `/admin` — toutes les entreprises, tous tenants confondus |
